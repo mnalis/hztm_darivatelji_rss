@@ -14,12 +14,14 @@ use feature qw(say);
 
 
 use CGI;
+use CGI::Carp qw(fatalsToBrowser);
 use Encode qw(decode);
 use HTML::TreeBuilder::XPath;
 use XML::Feed;
 
 
 my $q = new CGI;
+my $VERSION = '2015-04-17';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 
 
@@ -68,8 +70,8 @@ if (validate_oknull('feed', 'RSS2?')) {
   $mime = 'application/rss+xml';
 }
 my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)'); 
-$krv_grupa =~ tr/minus/=/;
-$krv_grupa =~ tr/plus/+/;
+$krv_grupa =~ s/minus/=/;
+$krv_grupa =~ s/plus/+/;
 
 my $expires_seconds = 60*60*12;
 
@@ -84,23 +86,21 @@ print $q->header( -type => $mime,
 ######################
 
 my $feed = XML::Feed->new($xml_feed);
-my $TAG_BASE = 'tag:mnalis.com,2015-04-17:/hztm';
-my $feed_id = '/HZTM-krv-unoff'; 
+my $TAG_BASE = 'tag:mnalis.com,2015-04-17:/hztm';	# DO NOT EDIT EVER!!
+my $feed_id = "/HZTM-krv-unoff/$krv_grupa"; 
 my $url = $q->url( -query => 1, -full => 1, -rewrite => 1);
 $feed->self_link($url);
-$feed->title( "Nedostatak krvih grupa u HZTM" );
+$feed->title( "Nedostatak krvne grupe $krv_grupa u HZTM" );
 $feed->id( "$TAG_BASE/$feed_id" );
-$feed->description( 'Niske zalihe krvi - za dobrovoljne darivatelje krvi Hrvatskog zavoda za transfuzijsku medicinu' );
+$feed->description( "Niske zalihe krvi grupe $krv_grupa (za dobrovoljne darivatelje krvi Hrvatskog zavoda za transfuzijsku medicinu)" );
 $feed->language('hr');
 $feed->copyright('Informacije su preuzete iz vanjskih izvora te ne odgovaramo za njihovu točnost');
 $feed->author('mnalis-hztm@voyager.hr ( http://mnalis.com/hztm/ )');
-$feed->generator('hztm_rss.cgi 2015-04-17 using XML::Feed ' . $XML::Feed::VERSION);
+$feed->generator("hztm_rss.cgi $VERSION using XML::Feed " . $XML::Feed::VERSION);
 $feed->link($url);
 
-# FIXME - polinkaj na mnalis.com
-# FIXME - na mnalis.com/hztm stavi formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
-# FIXME - da feed ID i title/description sadrzi oznaku krvne grupe i to blizu pocetku naziva (posto ce biti poseban feed za svaku krvnu grupu!)
-# FIXME - da je timestamp (koji je i id) isti za cijelu scriptu, a ne per-event
+# FIXME - polinkaj na mnalis.com/hztm mnalis.com
+# FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
 
 my $last_timestamp = 0;
 my $events_ref = [
