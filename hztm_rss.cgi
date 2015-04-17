@@ -11,13 +11,13 @@ use warnings;
 use Carp qw(verbose);
 use autodie;
 use feature qw(say);
-
-
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use Encode qw(decode);
 use HTML::TreeBuilder::XPath;
 use XML::Feed;
+use IO::Handle;
+use Fcntl ':flock';
 
 
 my $q = new CGI;
@@ -149,6 +149,38 @@ for my $jedna (@sve) {
   #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
   say '' . ($nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $grupa ($posto %)";
 }
+
+##############################
+#### update history files ####
+##############################
+
+# FIXME: TODO - we need history files so we know if our value has changed!
+# FIXME - perl-bloodgroup history files
+# FIXME - beware of deadlock, but lock both IN and OUT!
+# FIXME - flow: 
+#		- lock history file for reading
+#		- read it and cache in memory and find last state
+#		- if last state same as current, close and finish (autounlock)
+#		- otherwise, create temp file and lock it for writing
+#		- write cache to temp file
+#		- add new status to temp file
+#		- flush & sync temp file
+#		- rename temp file to history file
+#		- close temp file (autounlock) and input history file (autounlock)
+#		- generate output RSS using cached data (and new status) [only for requested blood group!]
+# FIXME - use global lock on non-changing readonly file for safety.
+        open my $IN, '<', $HISTORY_DATA or umri ('911', "can't read $HISTORY_DATA: $!");
+        flock($IN, LOCK_EX) or umri('911', "Could not lock $HISTORY_DATA: $!");
+        open my $OUT, '>', $HISTORY_TMP or umri ('911', "can't write $HISTORY_TMP: $!");
+        flock($OUT, LOCK_EX) or umri('911', "Could not lock $HISTORY_TMP: $!");
+
+....
+
+        # hopefully this provides atomicity (but not durabilitly, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
+        $OUT->flush or die "can't flush $HISTORY_TMP: $!";
+        $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
+        rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
+        close ($OUT) or die "can't close to $HISTORY_DATA: $!";
 
 
 
