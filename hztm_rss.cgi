@@ -20,7 +20,6 @@ use XML::Feed;
 
 
 my $q = new CGI;
-my $xml_feed = 'Atom';	# 'Atom' or 'RSS' -- FIXME choose by cgi->param
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 
 
@@ -37,7 +36,7 @@ sub _validate($$$)
     return undef if $ok_null;
     die "no param $param specified";
   }
-  if ($value =~ /^(${regex})$/) {
+  if ($value =~ /^(${regex})$/i) {
      $value = $1; 
      return $value;
   } 
@@ -60,8 +59,18 @@ sub validate_oknull($$)
 #### validate CGI params ####
 #############################
 
-$xml_feed = 'RSS' if validate_oknull('feed', '[Rr][Ss][Ss]2?');
-my $mime = ('Atom' eq $xml_feed) ? 'application/atom+xml' : 'application/rss+xml';
+my $xml_feed = 'Atom';
+my $mime = 'application/atom+xml';
+
+
+if (validate_oknull('feed', 'RSS2?')) {
+  $xml_feed = 'RSS';
+  $mime = 'application/rss+xml';
+}
+my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)'); 
+$krv_grupa =~ tr/minus/=/;
+$krv_grupa =~ tr/plus/+/;
+
 my $expires_seconds = 60*60*12;
 
 print $q->header( -type => $mime, 
@@ -88,6 +97,11 @@ $feed->author('mnalis-hztm@voyager.hr ( http://mnalis.com/hztm/ )');
 $feed->generator('hztm_rss.cgi 2015-04-17 using XML::Feed ' . $XML::Feed::VERSION);
 $feed->link($url);
 
+# FIXME - polinkaj na mnalis.com
+# FIXME - na mnalis.com/hztm stavi formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
+# FIXME - da feed ID i title/description sadrzi oznaku krvne grupe i to blizu pocetku naziva (posto ce biti poseban feed za svaku krvnu grupu!)
+# FIXME - da je timestamp (koji je i id) isti za cijelu scriptu, a ne per-event
+
 my $last_timestamp = 0;
 my $events_ref = [
   { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
@@ -99,17 +113,13 @@ foreach my $event (@$events_ref) {	# FIXME
     $entry->link( $HZTM_URL );
 
     if ($event->{nedostaje}) {
-        $entry->title( "$event->{datum} Nedostaje " );
+        $entry->title( "$event->{datum} Nedostaje $event->{grupa} krvne grupe" );
         $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
     } else {
         $entry->title( "$event->{datum} Ponovno ima dovoljno krvne grupe $event->{grupa}" );
         $entry->content( qq{Sa datumom $event->{datum} ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
     }
     
-    # NB it could be confusing to readers when RSS reader shows dates (which are NOT dates of event!). 
-    # But if we remove them, then RSS readers couldn't show updated events... So we'd need a kludge, 
-    # like removing modified() so no date is shown, making modified(datum) and issued(updated_unix), and/or
-    # changing entry->id. Leave it as it is for now... /mn/ 2013-11-11
     $entry->issued(   DateTime->from_epoch(epoch => $event->{timestamp}) );
     $entry->modified( DateTime->from_epoch(epoch => $event->{timestamp}) );
     
