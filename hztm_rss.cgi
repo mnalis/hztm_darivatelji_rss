@@ -19,16 +19,61 @@ use HTML::TreeBuilder::XPath;
 use XML::Feed;
 
 
-
 my $q = new CGI;
 my $xml_feed = 'Atom';	# 'Atom' or 'RSS' -- FIXME choose by cgi->param
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 
+
+#####################
+#### CGI helpers ####
+#####################
+
+# validate params
+sub _validate($$$)
+{
+  my ($param, $regex, $ok_null) = @_;
+  my $value = $q->param($param);
+  if (!defined($value)) {
+    return undef if $ok_null;
+    die "no param $param specified";
+  }
+  if ($value =~ /^(${regex})$/) {
+     $value = $1; 
+     return $value;
+  } 
+  die "invalid value for param $param = $value";
+}
+
+sub validate($$)
+{
+  my ($param, $regex) = @_;
+  return _validate ($param, $regex, 0);
+}
+
+sub validate_oknull($$)
+{
+  my ($param, $regex) = @_;
+  return _validate ($param, $regex, 1);
+}
+
+#############################
+#### validate CGI params ####
+#############################
+
+$xml_feed = 'RSS' if validate_oknull('feed', '[Rr][Ss][Ss]2?');
+my $mime = ('Atom' eq $xml_feed) ? 'application/atom+xml' : 'application/rss+xml';
+my $expires_seconds = 60*60*12;
+
+print $q->header( -type => $mime, 
+                  -charset=> 'utf-8',
+                  -cache_control => "max-age=${expires_seconds}, public", 
+                  -expires=> "+${expires_seconds}s",  
+      );
+                                                                                                                                                  
 ######################
 #### generate RSS ####
 ######################
 
-my $mime = ('Atom' eq $xml_feed) ? 'application/atom+xml' : 'application/rss+xml';
 my $feed = XML::Feed->new($xml_feed);
 my $TAG_BASE = 'tag:mnalis.com,2015-04-17:/hztm';
 my $feed_id = '/HZTM-krv-unoff'; 
@@ -38,21 +83,24 @@ $feed->title( "Nedostatak krvih grupa u HZTM" );
 $feed->id( "$TAG_BASE/$feed_id" );
 $feed->description( 'Niske zalihe krvi - za dobrovoljne darivatelje krvi Hrvatskog zavoda za transfuzijsku medicinu' );
 $feed->language('hr');
-$feed->copyright('Informacije su preuzete iz vanjskih izvora te su podložne promjeni i ne odgovaramo za njihovu točnost');
+$feed->copyright('Informacije su preuzete iz vanjskih izvora te ne odgovaramo za njihovu točnost');
 $feed->author('mnalis-hztm@voyager.hr ( http://mnalis.com/hztm/ )');
 $feed->generator('hztm_rss.cgi 2015-04-17 using XML::Feed ' . $XML::Feed::VERSION);
 $feed->link($url);
 
 my $last_timestamp = 0;
-my $events_ref = [{ id => 1, opis => 'neki opis', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 30, timestamp => time() }];
+my $events_ref = [
+  { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
+  { opis => 'neka druga', grupa=>'B=', nedostaje => 0, datum => '2015-01-01', posto => 30, timestamp => time() },
+];
 foreach my $event (@$events_ref) {	# FIXME
     my $entry = XML::Feed::Entry->new($xml_feed);
-    $entry->id( "$TAG_BASE/" . $event->{id} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
+    $entry->id( "$TAG_BASE/" . $event->{timestamp} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
     $entry->link( $HZTM_URL );
 
     if ($event->{nedostaje}) {
         $entry->title( "$event->{datum} Nedostaje " );
-        $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%)\nMolimo da se odazovete dobrovoljnom davanju krvi!\n\nHvala } );
+        $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
     } else {
         $entry->title( "$event->{datum} Ponovno ima dovoljno krvne grupe $event->{grupa}" );
         $entry->content( qq{Sa datumom $event->{datum} ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
