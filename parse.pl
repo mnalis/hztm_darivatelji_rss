@@ -11,11 +11,11 @@ use autodie;
 
 use HTML::TreeBuilder::XPath;
 
-my $FILE = 'zalihe-krvi';
+my $URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
+#my $FILE = 'zalihe-krvi';
 
-#open my $f_in, '<', $FILE;
-my $tree= HTML::TreeBuilder::XPath->new;
-$tree->parse_file($FILE);
+#my $tree= HTML::TreeBuilder::XPath->new_from_file($FILE);
+my $tree= HTML::TreeBuilder::XPath->new_from_url($URL);
 
 my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
 
