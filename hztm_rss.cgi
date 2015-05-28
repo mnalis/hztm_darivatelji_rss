@@ -23,7 +23,8 @@ use Fcntl ':flock';
 my $q = new CGI;
 my $VERSION = '2015-04-17';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
-
+my $HISTORY_DATA = 'krvne_grupe.history.txt';
+my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
 
 #####################
 #### CGI helpers ####
@@ -72,6 +73,7 @@ if (validate_oknull('feed', 'RSS2?')) {
 my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)'); 
 $krv_grupa =~ s/minus/=/;
 $krv_grupa =~ s/plus/+/;
+$krv_grupa = uc($krv_grupa);
 
 my $expires_seconds = 60*60*12;
 
@@ -140,14 +142,18 @@ my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_URL);
 
 my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
 
+my %current = ();
+my $c_timestamp = time;
+
 for my $jedna (@sve) {
-  my $posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
+  my $c_posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
   my $ime = $jedna->findnodes( 'div[contains(concat(" ", normalize-space(@class), " "),"name")]' )->[0];
-  my $grupa = $ime->content->[0];
+  my $c_grupa = $ime->content->[0];
   my $attr = $ime->attr('class');
-  my $nedostaje = ($attr =~ /\bbig\b/);
+  my $c_nedostaje = ($attr =~ /\bbig\b/);
   #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
-  say '' . ($nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $grupa ($posto %)";
+  say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
+  $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
 }
 
 ##############################
@@ -169,14 +175,40 @@ for my $jedna (@sve) {
 #		- close temp file (autounlock) and input history file (autounlock)
 #		- generate output RSS using cached data (and new status) [only for requested blood group!]
 # FIXME - use global lock on non-changing readonly file for safety.
-        open my $IN, '<', $HISTORY_DATA or umri ('911', "can't read $HISTORY_DATA: $!");
-        flock($IN, LOCK_EX) or umri('911', "Could not lock $HISTORY_DATA: $!");
-        open my $OUT, '>', $HISTORY_TMP or umri ('911', "can't write $HISTORY_TMP: $!");
-        flock($OUT, LOCK_EX) or umri('911', "Could not lock $HISTORY_TMP: $!");
 
-....
+my $count = 0;
+my @history = ();
+my %zadnja = ();
 
-        # hopefully this provides atomicity (but not durabilitly, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
+        open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
+        flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
+        open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
+        flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
+
+        while (<$IN>) {
+          chomp;
+          my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/;
+          say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
+          push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+          print $OUT "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n" or die "can't write to $HISTORY_TMP: $!";
+          $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+        }
+        
+        
+        foreach my $k (keys %current) {
+            say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
+            if (!%zadnja or ($current{$k}{nedostaje} ne $zadnja{$k}{nedostaje})) {
+                print $OUT "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n" or die "can't write to $HISTORY_TMP: $!";
+            }
+        }
+
+# FIXME: DELME: DEBUG
+#        use Data::Dumper;
+#        say Dumper(\%current);        
+#        say Dumper(\%zadnja);        
+#....
+
+        # hopefully this provides atomicity (but not durability, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
         $OUT->flush or die "can't flush $HISTORY_TMP: $!";
         $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
         rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
