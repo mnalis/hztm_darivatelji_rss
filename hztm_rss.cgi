@@ -105,7 +105,7 @@ $feed->link($url);
 # FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
 
 my $last_timestamp = 0;
-my $events_ref = [
+my $events_ref = [	# FIXME
   { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
   { opis => 'neka druga', grupa=>'B=', nedostaje => 0, datum => '2015-01-01', posto => 30, timestamp => time() },
 ];
@@ -160,19 +160,21 @@ for my $jedna (@sve) {
 #### update history files ####
 ##############################
 
+# FIXME: separate .cgi and parsing HZTM / updating history file scripts (use common module for paths/filenames/lockfiles?)
+#        or better: only use .cgi and do updating only if current_timestamp - history_file_timestamp > 24h ?
 # FIXME: TODO - we need history files so we know if our value has changed!
 # FIXME - perl-bloodgroup history files
 # FIXME - beware of deadlock, but lock both IN and OUT!
 # FIXME - flow: 
-#		- lock history file for reading
-#		- read it and cache in memory and find last state
-#		- if last state same as current, close and finish (autounlock)
-#		- otherwise, create temp file and lock it for writing
-#		- write cache to temp file
-#		- add new status to temp file
-#		- flush & sync temp file
-#		- rename temp file to history file
-#		- close temp file (autounlock) and input history file (autounlock)
+#		+ lock history file for reading
+#		+ read it and cache in memory and find last state
+#		+ if last state same as current, close and finish (autounlock)
+#		+ otherwise, create temp file and lock it for writing
+#		+ write cache to temp file
+#		+ add new status to temp file
+#		+ flush & sync temp file
+#		+ rename temp file to history file
+#		+ close temp file (autounlock) and input history file (autounlock)
 #		- generate output RSS using cached data (and new status) [only for requested blood group!]
 # FIXME - use global lock on non-changing readonly file for safety.
 
