@@ -66,14 +66,23 @@ my $xml_feed = 'Atom';
 my $mime = 'application/atom+xml';
 
 
-if (validate_oknull('feed', 'RSS2?')) {
+if (validate_oknull('feed', 'RSS2?')) {		# use older RSS2 instead of Atom1 XML feed?
   $xml_feed = 'RSS';
   $mime = 'application/rss+xml';
 }
+
 my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)'); 
 $krv_grupa =~ s/minus/=/;
 $krv_grupa =~ s/plus/+/;
 $krv_grupa = uc($krv_grupa);
+
+open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
+flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
+
+
+if (validate_oknull('update', '1') == 1) {
+  parse_html_and_update_history();		# force update if requested
+}
 
 my $expires_seconds = 60*60*12;
 
@@ -132,6 +141,8 @@ foreach my $event (@$events_ref) {	# FIXME
 $feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
 
 
+sub parse_html_and_update_history()
+{
 ########################
 #### parse the HTML ####
 ########################
@@ -182,8 +193,6 @@ my $count = 0;
 my @history = ();
 my %zadnja = ();
 
-        open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
-        flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
         open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
         flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
 
@@ -214,8 +223,10 @@ my %zadnja = ();
         $OUT->flush or die "can't flush $HISTORY_TMP: $!";
         $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
         rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
-        close ($OUT) or die "can't close to $HISTORY_DATA: $!";
-
+        # they will close automatically on program exit; do not release locks too soon
+        #close ($OUT) or die "can't close $HISTORY_DATA: $!";
+        #close ($IN);
+}
 
 
 say ''; 	# FIXME DELME DEBUG
