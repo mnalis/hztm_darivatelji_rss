@@ -4,6 +4,7 @@
 # detektira zalihe krvi u HZTMu, kako bi RSSom mogao dojaviti korisnicima kada neke krvne grupe nedostaje.
 #
 
+# FIXME: RSS/Atom - only display last 10 or changes (reorder the datafiles so newest lines are at top for efficiency)
 # FIXME: Wide character in print at ./hztm_rss.cgi line 97.
 
 use strict;
@@ -21,7 +22,7 @@ use Fcntl ':flock';
 
 
 my $q = new CGI;
-my $VERSION = '2015-04-17';	# change script version here.
+my $VERSION = '2015-06-20';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 my $HISTORY_DATA = 'krvne_grupe.history.txt';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
@@ -143,56 +144,53 @@ $feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
 
 sub parse_html_and_update_history()
 {
-########################
-#### parse the HTML ####
-########################
+        ########################
+        #### parse the HTML ####
+        ########################
 
+        #my $HZTM_FILE = 'zalihe-krvi'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
+        my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_URL);
 
-#my $HZTM_FILE = 'zalihe-krvi'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
-my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_URL);
+        my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
 
-my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
+        my %current = ();
+        my $c_timestamp = time;
 
-my %current = ();
-my $c_timestamp = time;
+        for my $jedna (@sve) {
+            my $c_posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
+            my $ime = $jedna->findnodes( 'div[contains(concat(" ", normalize-space(@class), " "),"name")]' )->[0];
+            my $c_grupa = $ime->content->[0];
+            my $attr = $ime->attr('class');
+            my $c_nedostaje = ($attr =~ /\bbig\b/) || 0;
+            #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
+            say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
+            $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
+        }
 
-for my $jedna (@sve) {
-  my $c_posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
-  my $ime = $jedna->findnodes( 'div[contains(concat(" ", normalize-space(@class), " "),"name")]' )->[0];
-  my $c_grupa = $ime->content->[0];
-  my $attr = $ime->attr('class');
-  my $c_nedostaje = ($attr =~ /\bbig\b/) || 0;
-  #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
-  say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
-  $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
-}
+        ##############################
+        #### update history files ####
+        ##############################
 
-##############################
-#### update history files ####
-##############################
+        # FIXME: separate .cgi and parsing HZTM / updating history file scripts (use common module for paths/filenames/lockfiles?)
+        #        or better: only use .cgi and do updating only if current_timestamp - history_file_timestamp > 24h ?
+        # FIXME - beware of deadlock, but lock both IN and OUT!
+        # FIXME - flow: 
+        #		+ lock history file for reading
+        #		+ read it and cache in memory and find last state
+        #		+ if last state same as current, close and finish (autounlock)
+        #		+ otherwise, create temp file and lock it for writing
+        #		+ write cache to temp file
+        #		+ add new status to temp file
+        #		+ flush & sync temp file
+        #		+ rename temp file to history file
+        #		+ close temp file (autounlock) and input history file (autounlock)
+        #		- generate output RSS using cached data (and new status) [only for requested blood group!]
+        # FIXME - use global lock on non-changing readonly file for safety. (on $0 -- vidi onu prezentaciju za locking).
 
-# FIXME: separate .cgi and parsing HZTM / updating history file scripts (use common module for paths/filenames/lockfiles?)
-#        or better: only use .cgi and do updating only if current_timestamp - history_file_timestamp > 24h ?
-# FIXME: TODO - we need history files so we know if our value has changed!
-# FIXME - perl-bloodgroup history files
-# FIXME - beware of deadlock, but lock both IN and OUT!
-# FIXME - flow: 
-#		+ lock history file for reading
-#		+ read it and cache in memory and find last state
-#		+ if last state same as current, close and finish (autounlock)
-#		+ otherwise, create temp file and lock it for writing
-#		+ write cache to temp file
-#		+ add new status to temp file
-#		+ flush & sync temp file
-#		+ rename temp file to history file
-#		+ close temp file (autounlock) and input history file (autounlock)
-#		- generate output RSS using cached data (and new status) [only for requested blood group!]
-# FIXME - use global lock on non-changing readonly file for safety. (on $0 -- vidi onu prezentaciju za locking).
-
-my $count = 0;
-my @history = ();
-my %zadnja = ();
-my $changed = 0;
+        my $count = 0;
+        my @history = ();
+        my %zadnja = ();
+        my $changed = 0;
 
         # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
         open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
@@ -201,12 +199,12 @@ my $changed = 0;
         # FIXME: optimize - keep old datafile in memory, and only write all that to temp file if there is new data to update
         # FIXME: if we don't write to temp file, this code can be not only more efficient by not writing in vain, but reused for reading the datafile (when we only need to display the RSS)
         while (<$IN>) {
-          chomp;
-          my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
-          say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
-          push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
-          print $OUT "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n" or die "can't write to $HISTORY_TMP: $!";
-          $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+            chomp;
+            my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
+            say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
+            push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+            print $OUT "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n" or die "can't write to $HISTORY_TMP: $!";
+            $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
         }
         
         
@@ -218,14 +216,9 @@ my $changed = 0;
             }
         }
 
-# FIXME: DELME: DEBUG
-#        use Data::Dumper;
-#        say Dumper(\%current);        
-#        say Dumper(\%zadnja);        
-#....
 
         if ($changed) {		# only update if actually changed
-            # hopefully this provides atomicity (but not durability, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
+            # hopefully this provides atomicity (but not durability [which is not important to us], as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
             $OUT->flush or die "can't flush $HISTORY_TMP: $!";
             $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
             rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
