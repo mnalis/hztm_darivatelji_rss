@@ -228,7 +228,7 @@ sub parse_html_and_update_history
         read_datafile();	# fills @history, %zadnja, $old_datafile
         my $prepend_datafile = '';
         foreach my $k (keys %current) {
-            say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
+            #say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
             if (!%zadnja or ($current{$k}{nedostaje} ne $zadnja{$k}{nedostaje})) {
                 $prepend_datafile .= "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n";
                 unshift @history, { timestamp => $current{$k}{timestamp}, grupa => $current{$k}{grupa}, nedostaje => $current{$k}{nedostaje}, posto => $current{$k}{posto} };	# prepend newly parsed HTML to @history
