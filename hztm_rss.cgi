@@ -40,6 +40,9 @@ my $VERSION = '2015-06-20';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
 my $force_update = 0;
+my @history = ();
+my %zadnja = ();
+my $old_datafile = '';
 
 #####################
 #### CGI helpers ####
@@ -105,6 +108,8 @@ if (defined ($UPDATE_SECONDS) and  ($age > $UPDATE_SECONDS)) {
 
 if (validate_oknull('update', '1') == 1 or $force_update) {
     parse_html_and_update_history();		# update if explicitely requested, of if due
+} else {
+    read_datafile();
 }
 
 generate_and_display_rss();
@@ -170,6 +175,25 @@ sub generate_and_display_rss
 }
 
 
+# reads whole datafile in @history (and $old_datafile), and updated %zadnja
+sub read_datafile()
+{
+        @history = ();
+        %zadnja = ();
+        $old_datafile = '';
+        seek $IN, 0, 0;		# position to beginning of the file
+
+        while (<$IN>) {
+            chomp;
+            my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
+            say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
+            push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+            $old_datafile .= "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n";
+            $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto } if !defined $zadnja{$h_grupa};
+        }
+}
+
+
 ###########################################################
 # parse HTZM HTML and update history datafiles if changed #
 ###########################################################
@@ -216,27 +240,15 @@ sub parse_html_and_update_history
         #		- generate output RSS using cached data (and new status) [only for requested blood group!]
         # FIXME - use global lock on non-changing readonly file for safety. (on $0 -- vidi onu prezentaciju za locking).
 
-        my $count = 0;
-        my @history = ();
-        my %zadnja = ();
-        my $old_datafile = '';
-        my $prepend_datafile = '';
         my $changed = $force_update;	# force datafile rewrite if not changed for too long
 
-        while (<$IN>) {
-            chomp;
-            my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
-            say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
-            push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
-            $old_datafile .= "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n";
-            $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto } if !defined $zadnja{$h_grupa};
-        }
-        
-        
+        read_datafile();	# fills @history, %zadnja, $old_datafile
+        my $prepend_datafile = '';
         foreach my $k (keys %current) {
             say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
             if (!%zadnja or ($current{$k}{nedostaje} ne $zadnja{$k}{nedostaje})) {
                 $prepend_datafile .= "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n";
+                unshift @history, { timestamp => $current{$k}{timestamp}, grupa => $current{$k}{grupa}, nedostaje => $current{$k}{nedostaje}, posto => $current{$k}{posto} };	# prepend newly parsed HTML to @history
                 $changed = 1;
             }
         }
