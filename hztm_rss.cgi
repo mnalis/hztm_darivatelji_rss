@@ -98,7 +98,7 @@ flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
 
 my $datafile_mtime = (stat($HISTORY_DATA))[9];
 my $age = time() - $datafile_mtime;
-say "$HISTORY_DATA mtime=$datafile_mtime, age=$age";
+#say "$HISTORY_DATA mtime=$datafile_mtime, age=$age";
 if (defined ($UPDATE_SECONDS) and  ($age > $UPDATE_SECONDS)) {
     $force_update = 1; 
 }
@@ -221,7 +221,7 @@ sub parse_html_and_update_history
         my %zadnja = ();
         my $old_datafile = '';
         my $prepend_datafile = '';
-        my $changed = 0;
+        my $changed = $force_update;	# force datafile rewrite if not changed for too long
 
         while (<$IN>) {
             chomp;
@@ -246,15 +246,12 @@ sub parse_html_and_update_history
             # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
             open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
             flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
-            print $OUT $prepend_datafile or die "can't write to $HISTORY_TMP: $!";
-            print $OUT $old_datafile or die "can't write to $HISTORY_TMP: $!";	# append all old data at the end
+            print $OUT "${prepend_datafile}${old_datafile}" or die "can't write to $HISTORY_TMP: $!";
 
-            # hopefully this provides atomicity (but not durability [which is not important to us], as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
+            # hopefully this provides atomicity (but not durability [which is not important to us] as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
             $OUT->flush or die "can't flush $HISTORY_TMP: $!";
             $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
             rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
-        } else {		# no new data to update
-            unlink $HISTORY_TMP;
         }
         # they will close automatically on program exit; do not release locks too soon
         #close ($OUT) or die "can't close $HISTORY_DATA: $!";
