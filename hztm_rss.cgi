@@ -187,16 +187,20 @@ for my $jedna (@sve) {
 #		+ rename temp file to history file
 #		+ close temp file (autounlock) and input history file (autounlock)
 #		- generate output RSS using cached data (and new status) [only for requested blood group!]
-# FIXME - use global lock on non-changing readonly file for safety.
+# FIXME - use global lock on non-changing readonly file for safety. (on $0 -- vidi onu prezentaciju za locking).
 
 my $count = 0;
 my @history = ();
 my %zadnja = ();
 my $changed = 0;
 
+        # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
         open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
         flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
 
+        # FIXME: optimize - keep old datafile in memory, and only write all that to temp file if there is new data to update
+        # FIXME: if we don't write to temp file, this code can be not only more efficient by not writing in vain, but reused for reading the datafile (when we only need to display the RSS)
+        # FIXME: always change x_nedostaje to 0 if it is '' for readability
         while (<$IN>) {
           chomp;
           my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/;
