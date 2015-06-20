@@ -192,6 +192,7 @@ for my $jedna (@sve) {
 my $count = 0;
 my @history = ();
 my %zadnja = ();
+my $changed = 0;
 
         open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
         flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
@@ -210,6 +211,7 @@ my %zadnja = ();
             say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
             if (!%zadnja or ($current{$k}{nedostaje} ne $zadnja{$k}{nedostaje})) {
                 print $OUT "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n" or die "can't write to $HISTORY_TMP: $!";
+                $changed = 1;
             }
         }
 
@@ -219,10 +221,14 @@ my %zadnja = ();
 #        say Dumper(\%zadnja);        
 #....
 
-        # hopefully this provides atomicity (but not durability, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
-        $OUT->flush or die "can't flush $HISTORY_TMP: $!";
-        $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
-        rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
+        if ($changed) {		# only update if actually changed
+            # hopefully this provides atomicity (but not durability, as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
+            $OUT->flush or die "can't flush $HISTORY_TMP: $!";
+            $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
+            rename $HISTORY_TMP, $HISTORY_DATA or die "can't rename $HISTORY_TMP to $HISTORY_DATA: $!";
+        } else {		# no new data to update
+            unlink $HISTORY_TMP;
+        }
         # they will close automatically on program exit; do not release locks too soon
         #close ($OUT) or die "can't close $HISTORY_DATA: $!";
         #close ($IN);
