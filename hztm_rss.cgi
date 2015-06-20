@@ -23,13 +23,51 @@ use XML::Feed;
 use IO::Handle;
 use Fcntl ':flock';
 
+################################
+# user configuration variables #
+################################
+my $EXPIRES_SECONDS = 60*60*12;		# indicate RSS should be cached for this many seconds
+my $HISTORY_DATA = 'krvne_grupe.history.txt';
 
+
+###################################
+# no user serviceable parts below #
+###################################
 my $q = new CGI;
 my $VERSION = '2015-06-20';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
-my $HISTORY_DATA = 'krvne_grupe.history.txt';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
-my $EXPIRES_SECONDS = 60*60*12;		# seconds for RSS to expire
+
+############################
+#### here goes the main ####
+############################
+
+my $xml_feed = 'Atom';
+my $mime = 'application/atom+xml';
+
+if (validate_oknull('feed', 'RSS2?')) {		# use older RSS2 instead of Atom1 XML feed?
+  $xml_feed = 'RSS';
+  $mime = 'application/rss+xml';
+}
+
+my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)');
+$krv_grupa =~ s/minus/=/;
+$krv_grupa =~ s/plus/+/;
+$krv_grupa = uc($krv_grupa);
+
+open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
+flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
+
+
+if (validate_oknull('update', '1') == 1) {	# FIXME: in addition, do updating if current_timestamp - history_file_timestamp > 24h ?
+  parse_html_and_update_history();		# force update if requested
+}
+
+generate_and_display_rss();
+
+exit 0;
+
+
 
 #####################
 #### CGI helpers ####
@@ -63,36 +101,11 @@ sub validate_oknull($$)
   return _validate ($param, $regex, 1);
 }
 
-#############################
-#### validate CGI params ####
-#############################
-
-my $xml_feed = 'Atom';
-my $mime = 'application/atom+xml';
-
-
-if (validate_oknull('feed', 'RSS2?')) {		# use older RSS2 instead of Atom1 XML feed?
-  $xml_feed = 'RSS';
-  $mime = 'application/rss+xml';
-}
-
-my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)'); 
-$krv_grupa =~ s/minus/=/;
-$krv_grupa =~ s/plus/+/;
-$krv_grupa = uc($krv_grupa);
-
-open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
-flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
-
-
-if (validate_oknull('update', '1') == 1) {
-  parse_html_and_update_history();		# force update if requested
-}
-
-generate_and_display_rss();
-
-
-sub generate_and_display_rss() {
+################################################################
+# generate and display RSS/Atom feed for requested blood group #
+################################################################
+sub generate_and_display_rss
+{
         print $q->header( -type => $mime, 
                           -charset=> 'utf-8',
                           -cache_control => "max-age=${EXPIRES_SECONDS}, public", 
@@ -144,7 +157,11 @@ sub generate_and_display_rss() {
         say decode('utf-8', $feed->as_xml);      # NB. XML::Atom is borken, see https://rt.cpan.org/Public/Bug/Display.html?id=43004 -- "$XML::Atom::ForceUnicode = 1" does not work for some reason, and even if it did this is safer as it is not global setting
 }
 
-sub parse_html_and_update_history()
+
+###########################################################
+# parse HTZM HTML and update history datafiles if changed #
+###########################################################
+sub parse_html_and_update_history
 {
         ########################
         #### parse the HTML ####
@@ -173,8 +190,6 @@ sub parse_html_and_update_history()
         #### update history files ####
         ##############################
 
-        # FIXME: separate .cgi and parsing HZTM / updating history file scripts (use common module for paths/filenames/lockfiles?)
-        #        or better: only use .cgi and do updating only if current_timestamp - history_file_timestamp > 24h ?
         # FIXME - beware of deadlock, but lock both IN and OUT!
         # FIXME - flow: 
         #		+ lock history file for reading
@@ -231,5 +246,3 @@ sub parse_html_and_update_history()
         #close ($OUT) or die "can't close $HISTORY_DATA: $!";
         #close ($IN);
 }
-
-
