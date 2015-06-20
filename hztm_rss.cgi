@@ -23,6 +23,7 @@ use HTML::TreeBuilder::XPath;
 use XML::Feed;
 use IO::Handle;
 use Fcntl ':flock';
+use POSIX qw(strftime);
 
 ################################
 # user configuration variables #
@@ -144,21 +145,18 @@ sub generate_and_display_rss
         $feed->link($url);
 
         my $last_timestamp = 0;
-        my $events_ref = [	# FIXME
-          { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
-          { opis => 'neka druga', grupa=>'B=', nedostaje => 0, datum => '2015-01-01', posto => 30, timestamp => time() },
-        ];
-        foreach my $event (@$events_ref) {
+        foreach my $event (@history) {
             my $entry = XML::Feed::Entry->new($xml_feed);
             $entry->id( "$TAG_BASE/" . $event->{timestamp} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
             $entry->link( $HZTM_URL );
+            my $datum = strftime("%d.%m.%Y", localtime($event->{timestamp}));
 
             if ($event->{nedostaje}) {
-                $entry->title( "$event->{datum} Nedostaje $event->{grupa} krvne grupe" );
-                $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
+                $entry->title( "$datum Nedostaje $event->{grupa} krvne grupe" );
+                $entry->content( qq{Sa datumom $datum nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
             } else {
-                $entry->title( "$event->{datum} Ponovno ima dovoljno krvne grupe $event->{grupa}" );
-                $entry->content( qq{Sa datumom $event->{datum} ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
+                $entry->title( "$datum Ponovno ima dovoljno krvne grupe $event->{grupa}" );
+                $entry->content( qq{Sa datumom $datum ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
             }
             
             $entry->issued(   DateTime->from_epoch(epoch => $event->{timestamp}) );
@@ -176,7 +174,7 @@ sub generate_and_display_rss
 
 
 # reads whole datafile in @history (and $old_datafile), and updated %zadnja
-sub read_datafile()
+sub read_datafile
 {
         @history = ();
         %zadnja = ();
