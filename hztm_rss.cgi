@@ -6,6 +6,9 @@
 
 # FIXME: RSS/Atom - only display last 10 or changes (reorder the datafiles so newest lines are at top for efficiency)
 # FIXME: Wide character in print at ./hztm_rss.cgi line 97.
+# FIXME - polinkaj na mnalis.com/hztm mnalis.com
+# FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
+
 
 use strict;
 use warnings;
@@ -26,6 +29,7 @@ my $VERSION = '2015-06-20';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 my $HISTORY_DATA = 'krvne_grupe.history.txt';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
+my $EXPIRES_SECONDS = 60*60*12;		# seconds for RSS to expire
 
 #####################
 #### CGI helpers ####
@@ -85,62 +89,60 @@ if (validate_oknull('update', '1') == 1) {
   parse_html_and_update_history();		# force update if requested
 }
 
-my $expires_seconds = 60*60*12;
+generate_and_display_rss();
 
-print $q->header( -type => $mime, 
-                  -charset=> 'utf-8',
-                  -cache_control => "max-age=${expires_seconds}, public", 
-                  -expires=> "+${expires_seconds}s",  
-      );
-                                                                                                                                                  
-######################
-#### generate RSS ####
-######################
 
-my $feed = XML::Feed->new($xml_feed);
-my $TAG_BASE = 'tag:mnalis.com,2015-04-17:/hztm';	# DO NOT EDIT EVER!!
-my $feed_id = "/HZTM-krv-unoff/$krv_grupa"; 
-my $url = $q->url( -query => 1, -full => 1, -rewrite => 1);
-$feed->self_link($url);
-$feed->title( "Nedostatak krvne grupe $krv_grupa u HZTM" );
-$feed->id( "$TAG_BASE/$feed_id" );
-$feed->description( "Niske zalihe krvi grupe $krv_grupa (za dobrovoljne darivatelje krvi Hrvatskog zavoda za transfuzijsku medicinu)" );
-$feed->language('hr');
-$feed->copyright('Informacije su preuzete iz vanjskih izvora te ne odgovaramo za njihovu točnost');
-$feed->author('mnalis-hztm@voyager.hr ( http://mnalis.com/hztm/ )');
-$feed->generator("hztm_rss.cgi $VERSION using XML::Feed " . $XML::Feed::VERSION);
-$feed->link($url);
+sub generate_and_display_rss() {
+        print $q->header( -type => $mime, 
+                          -charset=> 'utf-8',
+                          -cache_control => "max-age=${EXPIRES_SECONDS}, public", 
+                          -expires=> "+${EXPIRES_SECONDS}s",  
+              );
+              
+        my $feed = XML::Feed->new($xml_feed);
+        my $TAG_BASE = 'tag:mnalis.com,2015-04-17:/hztm';	# DO NOT EDIT EVER!!
+        my $feed_id = "/HZTM-krv-unoff/$krv_grupa"; 
+        my $url = $q->url( -query => 1, -full => 1, -rewrite => 1);
+        $feed->self_link($url);
+        $feed->title( "Nedostatak krvne grupe $krv_grupa u HZTM" );
+        $feed->id( "$TAG_BASE/$feed_id" );
+        $feed->description( "Niske zalihe krvi grupe $krv_grupa (za dobrovoljne darivatelje krvi Hrvatskog zavoda za transfuzijsku medicinu)" );
+        $feed->language('hr');
+        $feed->copyright('Informacije su preuzete iz vanjskih izvora te ne odgovaramo za njihovu točnost');
+        $feed->author('mnalis-hztm@voyager.hr ( http://mnalis.com/hztm/ )');
+        $feed->generator("hztm_rss.cgi $VERSION using XML::Feed " . $XML::Feed::VERSION);
+        $feed->link($url);
 
-# FIXME - polinkaj na mnalis.com/hztm mnalis.com
-# FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
+        my $last_timestamp = 0;
+        my $events_ref = [	# FIXME
+          { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
+          { opis => 'neka druga', grupa=>'B=', nedostaje => 0, datum => '2015-01-01', posto => 30, timestamp => time() },
+        ];
+        foreach my $event (@$events_ref) {
+            my $entry = XML::Feed::Entry->new($xml_feed);
+            $entry->id( "$TAG_BASE/" . $event->{timestamp} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
+            $entry->link( $HZTM_URL );
 
-my $last_timestamp = 0;
-my $events_ref = [	# FIXME
-  { opis => 'prva', grupa=>'A+', nedostaje => 1, datum => '2015-01-01', posto => 10, timestamp => time() },
-  { opis => 'neka druga', grupa=>'B=', nedostaje => 0, datum => '2015-01-01', posto => 30, timestamp => time() },
-];
-foreach my $event (@$events_ref) {	# FIXME
-    my $entry = XML::Feed::Entry->new($xml_feed);
-    $entry->id( "$TAG_BASE/" . $event->{timestamp} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
-    $entry->link( $HZTM_URL );
+            if ($event->{nedostaje}) {
+                $entry->title( "$event->{datum} Nedostaje $event->{grupa} krvne grupe" );
+                $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
+            } else {
+                $entry->title( "$event->{datum} Ponovno ima dovoljno krvne grupe $event->{grupa}" );
+                $entry->content( qq{Sa datumom $event->{datum} ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
+            }
+            
+            $entry->issued(   DateTime->from_epoch(epoch => $event->{timestamp}) );
+            $entry->modified( DateTime->from_epoch(epoch => $event->{timestamp}) );
+            
+            $last_timestamp = $event->{timestamp} if $event->{timestamp} > $last_timestamp;	# increment last feed update timestamp if needed.
+            
+            $feed->add_entry($entry);
+        }
+        $feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
 
-    if ($event->{nedostaje}) {
-        $entry->title( "$event->{datum} Nedostaje $event->{grupa} krvne grupe" );
-        $entry->content( qq{Sa datumom $event->{datum} nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
-    } else {
-        $entry->title( "$event->{datum} Ponovno ima dovoljno krvne grupe $event->{grupa}" );
-        $entry->content( qq{Sa datumom $event->{datum} ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
-    }
-    
-    $entry->issued(   DateTime->from_epoch(epoch => $event->{timestamp}) );
-    $entry->modified( DateTime->from_epoch(epoch => $event->{timestamp}) );
-    
-    $last_timestamp = $event->{timestamp} if $event->{timestamp} > $last_timestamp;	# increment last feed update timestamp if needed.
-    
-    $feed->add_entry($entry);
+        say ''; 	# FIXME DELME DEBUG
+        say decode('utf-8', $feed->as_xml);      # NB. XML::Atom is borken, see https://rt.cpan.org/Public/Bug/Display.html?id=43004 -- "$XML::Atom::ForceUnicode = 1" does not work for some reason, and even if it did this is safer as it is not global setting
 }
-$feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
-
 
 sub parse_html_and_update_history()
 {
@@ -231,5 +233,3 @@ sub parse_html_and_update_history()
 }
 
 
-say ''; 	# FIXME DELME DEBUG
-say decode('utf-8', $feed->as_xml);      # NB. XML::Atom is borken, see https://rt.cpan.org/Public/Bug/Display.html?id=43004 -- "$XML::Atom::ForceUnicode = 1" does not work for some reason, and even if it did this is safer as it is not global setting
