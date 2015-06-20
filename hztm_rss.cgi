@@ -6,8 +6,7 @@
 # in Debian requisite modules are installed with: "apt-get install libhtml-treebuilder-xpath-perl libxml-feed-perl libcgi-pm-perl"
 #
 # FIXME - RSS/Atom - only display last 10 or changes
-# FIXME - polinkaj na mnalis.com/hztm mnalis.com
-# FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
+# FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu.
 # FIXME - also handle "too much blood for this group" condition later
 
 
