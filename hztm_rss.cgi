@@ -8,6 +8,7 @@
 # FIXME: Wide character in print at ./hztm_rss.cgi line 97.
 # FIXME - polinkaj na mnalis.com/hztm mnalis.com
 # FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
+# FIXME - also handle "too much blood for this group" condition later
 
 
 use strict;
@@ -26,8 +27,9 @@ use Fcntl ':flock';
 ################################
 # user configuration variables #
 ################################
-my $EXPIRES_SECONDS = 60*60*12;		# indicate RSS should be cached for this many seconds
+my $EXPIRES_SECONDS = 60*60*12;		# indicate RSS should be cached for this many seconds (to try to lower load on server)
 my $HISTORY_DATA = 'krvne_grupe.history.txt';
+my $UPDATE_SECONDS = 60*60*24*1;	# force update if not changed for this many seconds (safety fallback in case script is never called from cron with update=1)
 
 
 ###################################
@@ -37,37 +39,7 @@ my $q = new CGI;
 my $VERSION = '2015-06-20';	# change script version here.
 my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
-
-############################
-#### here goes the main ####
-############################
-
-my $xml_feed = 'Atom';
-my $mime = 'application/atom+xml';
-
-if (validate_oknull('feed', 'RSS2?')) {		# use older RSS2 instead of Atom1 XML feed?
-  $xml_feed = 'RSS';
-  $mime = 'application/rss+xml';
-}
-
-my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)');
-$krv_grupa =~ s/minus/=/;
-$krv_grupa =~ s/plus/+/;
-$krv_grupa = uc($krv_grupa);
-
-open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
-flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
-
-
-if (validate_oknull('update', '1') == 1) {	# FIXME: in addition, do updating if current_timestamp - history_file_timestamp > 24h ?
-  parse_html_and_update_history();		# force update if requested
-}
-
-generate_and_display_rss();
-
-exit 0;
-
-
+my $force_update = 0;
 
 #####################
 #### CGI helpers ####
@@ -100,6 +72,46 @@ sub validate_oknull($$)
   my ($param, $regex) = @_;
   return _validate ($param, $regex, 1);
 }
+
+
+############################
+#### here goes the main ####
+############################
+
+my $xml_feed = 'Atom';
+my $mime = 'application/atom+xml';
+$mime = 'text/ascii';	# FIXME: DEBUG only
+
+if (validate_oknull('feed', 'RSS2?')) {		# if we want to use older RSS2 instead of Atom1 XML feed
+    $xml_feed = 'RSS';
+    $mime = 'application/rss+xml';
+}
+
+
+my $krv_grupa = validate('grupa', '(0|A|B|AB)(minus|plus)');
+$krv_grupa =~ s/minus/=/;
+$krv_grupa =~ s/plus/+/;
+$krv_grupa = uc($krv_grupa);
+
+open my $IN, '<', $HISTORY_DATA or die "can't read $HISTORY_DATA: $!";
+flock($IN, LOCK_EX) or die "Could not lock $HISTORY_DATA: $!";
+
+my $datafile_mtime = (stat($HISTORY_DATA))[9];
+my $age = time() - $datafile_mtime;
+say "$HISTORY_DATA mtime=$datafile_mtime, age=$age";
+if (defined ($UPDATE_SECONDS) and  ($age > $UPDATE_SECONDS)) {
+    $force_update = 1; 
+}
+
+if (validate_oknull('update', '1') == 1 or $force_update) {
+    parse_html_and_update_history();		# update if explicitely requested, of if due
+}
+
+generate_and_display_rss();
+
+exit 0;
+
+
 
 ################################################################
 # generate and display RSS/Atom feed for requested blood group #
@@ -207,7 +219,7 @@ sub parse_html_and_update_history
         my $count = 0;
         my @history = ();
         my %zadnja = ();
-        my $changed = 0;
+        my $changed = $force_update;	# if file not updated for too long, force it to be rewritten
 
         # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
         open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
