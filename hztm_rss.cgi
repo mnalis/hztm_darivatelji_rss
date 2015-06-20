@@ -170,7 +170,7 @@ sub generate_and_display_rss
         }
         $feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
 
-        say decode('utf-8', $feed->as_xml);      # NB. XML::Atom is borken, see https://rt.cpan.org/Public/Bug/Display.html?id=43004 -- "$XML::Atom::ForceUnicode = 1" does not work for some reason, and even if it did this is safer as it is not global setting
+        say $feed->as_xml;
 }
 
 
