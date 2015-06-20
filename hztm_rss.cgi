@@ -161,7 +161,7 @@ for my $jedna (@sve) {
   my $ime = $jedna->findnodes( 'div[contains(concat(" ", normalize-space(@class), " "),"name")]' )->[0];
   my $c_grupa = $ime->content->[0];
   my $attr = $ime->attr('class');
-  my $c_nedostaje = ($attr =~ /\bbig\b/);
+  my $c_nedostaje = ($attr =~ /\bbig\b/) || 0;
   #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
   say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
   $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
@@ -200,10 +200,9 @@ my $changed = 0;
 
         # FIXME: optimize - keep old datafile in memory, and only write all that to temp file if there is new data to update
         # FIXME: if we don't write to temp file, this code can be not only more efficient by not writing in vain, but reused for reading the datafile (when we only need to display the RSS)
-        # FIXME: always change x_nedostaje to 0 if it is '' for readability
         while (<$IN>) {
           chomp;
-          my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/;
+          my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
           say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
           push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
           print $OUT "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n" or die "can't write to $HISTORY_TMP: $!";
