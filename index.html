@@ -1,5 +1,7 @@
-<html>
+<!DOCTYPE html>
+<html lang="hr">
 <head>
+	<meta charset="utf-8">
 	<title>RSS/Atom feed potražnje krvnih grupa u HZTM-u</title>
 	<link href="hztm_rss.cgi?grupa=0minus"  type="application/atom+xml" rel="alternate" title="HZTM 0- Feed">
 	<link href="hztm_rss.cgi?grupa=0plus"   type="application/atom+xml" rel="alternate" title="HZTM 0+ Feed">
@@ -20,7 +22,38 @@ preko RSS/Atom feed-a, kako bi imali promptnu informaciju o nedostatku
 određene krvne grupe, te se mogli odazvati dobrovoljnom davanju krvi.
 
 <p>
+<form method="GET" action="hztm_rss.cgi">
+<label>Krvna grupa
+<select name="grupa">
+	<option value="0minus">0-</option>
+	<option value="0plus">0+</option>
+	<option value="Aminus">A-</option>
+	<option value="Aplus">A+</option>
+	<option value="Bminus">B-</option>
+	<option value="Bplus">B+</option>
+	<option value="ABminus">AB-</option>
+	<option value="ABplus">AB+</option>
+</select>
+</label><br>
+
+<label>Feed type
+<select name="feed">
+	<option value="Atom">Atom (recommended)</option>
+	<option value="RSS2">RSS 2.0 (obsolete)</option>
+</select>
+</label><br>
+
+<label>Force update
+	<input TYPE=checkbox NAME="update">
+<label><br><br>
+
+<input type="submit" value="Generiraj RSS/Atom feed">
+
+</form>
+
+
+<p>
 Source kod je dostupan na <a href="https://github.com/mnalis/hztm_darivatelji_rss">GitHubu</a>. 
-Autor nije djelatnik HZTM-a. 
+Autor nije djelatnik HZTM-a. Baza se obnavlja jednom dnevno.
 </body>
 </html>

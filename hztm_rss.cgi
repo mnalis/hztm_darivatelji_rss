@@ -84,7 +84,7 @@ sub validate_oknull($$)
 my $xml_feed = 'Atom';
 my $mime = 'application/atom+xml';
 
-if (validate_oknull('feed', 'RSS2?')) {		# if we want to use older RSS2 instead of Atom1 XML feed
+if (validate_oknull('feed', 'Atom|RSS2?') =~ /rss/i) {		# if we want to use older RSS2 instead of Atom1 XML feed
     $xml_feed = 'RSS';
     $mime = 'application/rss+xml';
 }
@@ -105,7 +105,7 @@ if (defined ($UPDATE_SECONDS) and  ($age > $UPDATE_SECONDS)) {
     $force_update = 1; 
 }
 
-my $p_update = validate_oknull('update', '1') || 0;
+my $p_update = validate_oknull('update', '0|1|on') || 0;
 if ($p_update or $force_update) {
     parse_html_and_update_history();		# update if explicitely requested, of if due
 } else {
