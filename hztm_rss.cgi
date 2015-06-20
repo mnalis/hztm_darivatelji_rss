@@ -3,9 +3,9 @@
 #
 # detektira zalihe krvi u HZTMu, kako bi RSSom mogao dojaviti korisnicima kada neke krvne grupe nedostaje.
 #
-
-# FIXME: RSS/Atom - only display last 10 or changes
-# FIXME: Wide character in print at ./hztm_rss.cgi line 97.
+# in Debian requisite modules are installed with: "apt-get install libhtml-treebuilder-xpath-perl libxml-feed-perl libcgi-pm-perl"
+#
+# FIXME - RSS/Atom - only display last 10 or changes
 # FIXME - polinkaj na mnalis.com/hztm mnalis.com
 # FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
 # FIXME - also handle "too much blood for this group" condition later
@@ -84,7 +84,6 @@ sub validate_oknull($$)
 
 my $xml_feed = 'Atom';
 my $mime = 'application/atom+xml';
-#$mime = 'text/ascii';	# FIXME: DEBUG only
 
 if (validate_oknull('feed', 'RSS2?')) {		# if we want to use older RSS2 instead of Atom1 XML feed
     $xml_feed = 'RSS';
@@ -217,7 +216,7 @@ sub parse_html_and_update_history
             my $attr = $ime->attr('class');
             my $c_nedostaje = ($attr =~ /\bbig\b/) || 0;
             #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
-            say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
+            #say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
             $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
         }
 
