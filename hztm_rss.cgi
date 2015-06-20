@@ -4,7 +4,7 @@
 # detektira zalihe krvi u HZTMu, kako bi RSSom mogao dojaviti korisnicima kada neke krvne grupe nedostaje.
 #
 
-# FIXME: RSS/Atom - only display last 10 or changes (reorder the datafiles so newest lines are at top for efficiency)
+# FIXME: RSS/Atom - only display last 10 or changes
 # FIXME: Wide character in print at ./hztm_rss.cgi line 97.
 # FIXME - polinkaj na mnalis.com/hztm mnalis.com
 # FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu. I link rel= isto za sve grupe..
@@ -29,7 +29,7 @@ use Fcntl ':flock';
 ################################
 my $EXPIRES_SECONDS = 60*60*12;		# indicate RSS should be cached for this many seconds (to try to lower load on server)
 my $HISTORY_DATA = 'krvne_grupe.history.txt';
-my $UPDATE_SECONDS = 60*60*24*1;	# force update if not changed for this many seconds (safety fallback in case script is never called from cron with update=1)
+my $UPDATE_SECONDS = 60*60*24*1;	# force update if not changed for this many seconds (safety fallback in case script is never called from cron with update=1). you may want increase to a week, or comment out if this feature is not wanted.
 
 
 ###################################
@@ -80,7 +80,7 @@ sub validate_oknull($$)
 
 my $xml_feed = 'Atom';
 my $mime = 'application/atom+xml';
-$mime = 'text/ascii';	# FIXME: DEBUG only
+#$mime = 'text/ascii';	# FIXME: DEBUG only
 
 if (validate_oknull('feed', 'RSS2?')) {		# if we want to use older RSS2 instead of Atom1 XML feed
     $xml_feed = 'RSS';
@@ -219,34 +219,36 @@ sub parse_html_and_update_history
         my $count = 0;
         my @history = ();
         my %zadnja = ();
-        my $changed = $force_update;	# if file not updated for too long, force it to be rewritten
+        my $old_datafile = '';
+        my $prepend_datafile = '';
+        my $changed = 0;
 
-        # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
-        open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
-        flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
-
-        # FIXME: optimize - keep old datafile in memory, and only write all that to temp file if there is new data to update
-        # FIXME: if we don't write to temp file, this code can be not only more efficient by not writing in vain, but reused for reading the datafile (when we only need to display the RSS)
         while (<$IN>) {
             chomp;
             my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
             say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
             push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
-            print $OUT "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n" or die "can't write to $HISTORY_TMP: $!";
-            $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
+            $old_datafile .= "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n";
+            $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto } if !defined $zadnja{$h_grupa};
         }
         
         
         foreach my $k (keys %current) {
             say "current key $k($current{$k}{grupa}) => ($current{$k}{nedostaje}) $current{$k}{posto}%";
             if (!%zadnja or ($current{$k}{nedostaje} ne $zadnja{$k}{nedostaje})) {
-                print $OUT "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n" or die "can't write to $HISTORY_TMP: $!";
+                $prepend_datafile .= "$current{$k}{timestamp}\t$current{$k}{grupa}\t$current{$k}{nedostaje}\t$current{$k}{posto}\n";
                 $changed = 1;
             }
         }
 
 
         if ($changed) {		# only update if actually changed
+            # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
+            open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
+            flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
+            print $OUT $prepend_datafile or die "can't write to $HISTORY_TMP: $!";
+            print $OUT $old_datafile or die "can't write to $HISTORY_TMP: $!";	# append all old data at the end
+
             # hopefully this provides atomicity (but not durability [which is not important to us], as we don't fsync dir after rename) -- see http://stackoverflow.com/questions/7433057/is-rename-without-fsync-safe & http://lwn.net/Articles/457667/
             $OUT->flush or die "can't flush $HISTORY_TMP: $!";
             $OUT->sync or die "can't fsync $HISTORY_TMP: $!";
