@@ -107,7 +107,8 @@ if (defined ($UPDATE_SECONDS) and  ($age > $UPDATE_SECONDS)) {
     $force_update = 1; 
 }
 
-if (validate_oknull('update', '1') == 1 or $force_update) {
+my $p_update = validate_oknull('update', '1') || 0;
+if ($p_update or $force_update) {
     parse_html_and_update_history();		# update if explicitely requested, of if due
 } else {
     read_datafile();
@@ -146,6 +147,7 @@ sub generate_and_display_rss
 
         my $last_timestamp = 0;
         foreach my $event (@history) {
+            next if $event->{grupa} ne $krv_grupa;		# skip over blood groups we don't want to display in this run
             my $entry = XML::Feed::Entry->new($xml_feed);
             $entry->id( "$TAG_BASE/" . $event->{timestamp} . $feed_id );              # see http://taguri.org (RFC 4151), and http://web.archive.org/web/20110514113830/http://diveintomark.org/archives/2004/05/28/howto-atom-id
             $entry->link( $HZTM_URL );
@@ -153,10 +155,10 @@ sub generate_and_display_rss
 
             if ($event->{nedostaje}) {
                 $entry->title( "$datum Nedostaje $event->{grupa} krvne grupe" );
-                $entry->content( qq{Sa datumom $datum nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi! \n\nHvala } );
+                $entry->content( "Sa datumom $datum nedostaje krvne grupe $event->{grupa} (zalihe su samo $event->{posto}%). \nMolimo da se odazovete dobrovoljnom davanju krvi.\n\nHvala unaprijed!" );
             } else {
                 $entry->title( "$datum Ponovno ima dovoljno krvne grupe $event->{grupa}" );
-                $entry->content( qq{Sa datumom $datum ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa} } );
+                $entry->content( "Sa datumom $datum ponovo ima dovoljno ($event->{posto}%) krvne grupe $event->{grupa}" );
             }
             
             $entry->issued(   DateTime->from_epoch(epoch => $event->{timestamp}) );
@@ -168,7 +170,6 @@ sub generate_and_display_rss
         }
         $feed->modified (DateTime->from_epoch(epoch => $last_timestamp));
 
-        say ''; 	# FIXME DELME DEBUG
         say decode('utf-8', $feed->as_xml);      # NB. XML::Atom is borken, see https://rt.cpan.org/Public/Bug/Display.html?id=43004 -- "$XML::Atom::ForceUnicode = 1" does not work for some reason, and even if it did this is safer as it is not global setting
 }
 
@@ -184,7 +185,7 @@ sub read_datafile
         while (<$IN>) {
             chomp;
             my ($h_timestamp, $h_grupa, $h_nedostaje, $h_posto) = split /\t/; $h_nedostaje = 0 if ! $h_nedostaje;
-            say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
+            #say "[$#history] $h_timestamp, $h_grupa, $h_nedostaje, $h_posto";
             push @history, { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto };
             $old_datafile .= "$h_timestamp\t$h_grupa\t$h_nedostaje\t$h_posto\n";
             $zadnja{$h_grupa} = { timestamp => $h_timestamp, grupa => $h_grupa, nedostaje => $h_nedostaje, posto => $h_posto } if !defined $zadnja{$h_grupa};
@@ -223,21 +224,6 @@ sub parse_html_and_update_history
         ##############################
         #### update history files ####
         ##############################
-
-        # FIXME - beware of deadlock, but lock both IN and OUT!
-        # FIXME - flow: 
-        #		+ lock history file for reading
-        #		+ read it and cache in memory and find last state
-        #		+ if last state same as current, close and finish (autounlock)
-        #		+ otherwise, create temp file and lock it for writing
-        #		+ write cache to temp file
-        #		+ add new status to temp file
-        #		+ flush & sync temp file
-        #		+ rename temp file to history file
-        #		+ close temp file (autounlock) and input history file (autounlock)
-        #		- generate output RSS using cached data (and new status) [only for requested blood group!]
-        # FIXME - use global lock on non-changing readonly file for safety. (on $0 -- vidi onu prezentaciju za locking).
-
         my $changed = $force_update;	# force datafile rewrite if not changed for too long
 
         read_datafile();	# fills @history, %zadnja, $old_datafile
@@ -253,7 +239,7 @@ sub parse_html_and_update_history
 
 
         if ($changed) {		# only update if actually changed
-            # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK
+            # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK. And we prefer prepending instead of appending.
             open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
             flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
             print $OUT "${prepend_datafile}${old_datafile}" or die "can't write to $HISTORY_TMP: $!";
