@@ -84,7 +84,8 @@ sub validate_oknull($$)
 my $xml_feed = 'Atom';
 my $mime = 'application/atom+xml';
 
-if (validate_oknull('feed', 'Atom|RSS2?') =~ /rss/i) {		# if we want to use older RSS2 instead of Atom1 XML feed
+my $feed_type = validate_oknull('feed', 'Atom|RSS2?') || 'Atom';
+if ($feed_type =~ /rss/i) {		# if we want to use older RSS2 instead of Atom1 XML feed
     $xml_feed = 'RSS';
     $mime = 'application/rss+xml';
 }
@@ -237,6 +238,7 @@ sub parse_html_and_update_history
 
 
         if ($changed) {		# only update if actually changed
+            $datafile_mtime = time;	# indicate it just changed
             # note: we'd be more efficient with just appended to main datafile, but it is not safe in event of crash. so we rewrite to temp file + rename if all is OK. And we prefer prepending instead of appending.
             open my $OUT, '>', $HISTORY_TMP or die "can't create $HISTORY_TMP: $!";
             flock($OUT, LOCK_EX) or die "Could not lock $HISTORY_TMP: $!";
