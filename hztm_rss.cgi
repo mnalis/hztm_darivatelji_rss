@@ -239,8 +239,8 @@ sub parse_html_and_update_history
         my $c_timestamp = time;
 
 
-        #my $html = fetch_url($HZTM_URL); #FIXME
-        my $html = fetch_url('file:./blood_data_index.html');   # DEBUG ONLY
+        my $html = fetch_url($HZTM_URL);
+        #my $html = fetch_url('file:./blood_data_index.html');   # DEBUG ONLY
         #say $html;
         # NB: unfortunately, JSON::PP even with all allow_* fails parsing at document.getElementById, so we have to this manually :(
         if ($html =~ /const\s+groups\s*=\s*\{\s*(.*?)^\s*\}\s*$/gms) {
@@ -254,7 +254,7 @@ sub parse_html_and_update_history
                     full\s*:\s*(\d+)\s*,\s*
                     empty\s*:\s*(\d+)\s*,\s*
                 /x) {
-              say "grupa=$KRV{$1}, min=$2, max=$3, full=$4, empty=$5";
+              #say "grupa=$KRV{$1}, min=$2, max=$3, full=$4, empty=$5";
               #$current{$KRV{$1}} = { timestamp => $c_timestamp, grupa=>$KRV{$1}, min=>$2, max=>$3, full=>$4, empty=>$5 };
               $current{$KRV{$1}} = { timestamp => $c_timestamp, grupa=>$KRV{$1}, full=>$4, empty=>$5 };
             } else {
@@ -270,8 +270,8 @@ sub parse_html_and_update_history
         #### parse the current CSV XHR blood data ####
         ##############################################
 
-        #my $blood_data = fetch_url($HZTM_DATA_URL); #FIXME
-        my $blood_data = fetch_url('file:./blood_data.html');   # DEBUG ONLY
+        my $blood_data = fetch_url($HZTM_DATA_URL);
+        #my $blood_data = fetch_url('file:./blood_data.html');   # DEBUG ONLY
 
         # NB. Text::CSV wants filehandles, and we have strings... oh well, parse manually
         my @blood_data = split /^/, $blood_data;
@@ -288,7 +288,7 @@ sub parse_html_and_update_history
           #$current{$bd_grupa}{'bd_broj'} = $bd_broj;
           
           my $c_posto = int(($bd_broj - $current{$bd_grupa}{'empty'}) / $current{$bd_grupa}{'full'}*100);
-          say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak, c_posto=$c_posto";
+          #say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak, c_posto=$c_posto";
           $current{$bd_grupa}{'posto'} = $c_posto;
           $current{$bd_grupa}{'nedostaje'} = ($c_posto < 30)?1:0
           #use Data::Dumper; say "post $bd_grupa (c_posto=$c_posto):" . Dumper($current{$bd_grupa});
