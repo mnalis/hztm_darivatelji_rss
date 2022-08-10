@@ -229,7 +229,7 @@ sub parse_html_and_update_history
 
 
         #my $html = fetch_url($HZTM_URL); #FIXME
-        my $html = fetch_url('file:./blood_data_index.html');
+        my $html = fetch_url('file:./blood_data_index.html');   # DEBUG ONLY
         #say $html;
         # NB: unfortunately, JSON::PP even with all allow_* fails parsing at document.getElementById, so we have to this manually :(
         if ($html =~ /const\s+groups\s*=\s*\{\s*(.*?)^\s*\}\s*$/gms) {
@@ -244,7 +244,8 @@ sub parse_html_and_update_history
                     empty\s*:\s*(\d+)\s*,\s*
                 /x) {
               say "grupa=$1, min=$2, max=$3, full=$4, empty=$5";
-              $current{$1} = { timestamp => $c_timestamp, grupa=>$1, min=>$2, max=>$3, full=>$4, empty=>$5 };
+              #$current{$1} = { timestamp => $c_timestamp, grupa=>$1, min=>$2, max=>$3, full=>$4, empty=>$5 };
+              $current{$1} = { timestamp => $c_timestamp, grupa=>$1, full=>$4, empty=>$5 };
             } else {
               die "can't parse JS const: $c";
             }
@@ -259,7 +260,7 @@ sub parse_html_and_update_history
         ##############################################
 
         #my $blood_data = fetch_url($HZTM_DATA_URL); #FIXME
-        my $blood_data = fetch_url('file:./blood_data.html');
+        my $blood_data = fetch_url('file:./blood_data.html');   # DEBUG ONLY
 
         # NB. Text::CSV wants filehandles, and we have strings... oh well, parse manually
         my @blood_data = split /^/, $blood_data;
@@ -269,7 +270,7 @@ sub parse_html_and_update_history
           chomp $b;
           #say "b=$b";
           my ($bd_grupa, $bd_broj, $bd_postotak) = split /\|/, $b;
-          say "BD: grupa=$bd_grupa, broj=$bd_broj, postotak=$bd_postotak";
+          say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak";
           use Data::Dumper;
           #say "pre $bd_grupa:" . Dumper($current{$bd_grupa});
           $current{$bd_grupa}{bd_broj} = $bd_broj;
@@ -277,10 +278,20 @@ sub parse_html_and_update_history
           #say "post $bd_grupa:" . Dumper($current{$bd_grupa});
         }
         
-        #say "$data";
+# JS code:
+#        let newVal = empty;
+#        if (val > group.empty && val <= group.full) {
+#            newVal = ((val-group.empty)/group.full)*full;
+#              }
+#              else if (val > group.full) {
+#            newVal = full;
+#        } else {
+#            newVal = empty;
+#        }
+#        group.el.style.height = newVal + 'px';
+
         
         die "fixme /mn/";
-
 
         my $HZTM_FILE = 'blood_data.html'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
         #my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_DATA_URL);
