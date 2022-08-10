@@ -6,4 +6,4 @@ i radi novi RSS event ako je zaliha krvi pala ispod minimuma
 
 Live instanca na: http://mnalis.com/hztm/
 
-(05/2022 trenutno nedostupno zbog izrade novih stranica hztm.hr)
+(05/2022 trenutno nedostupno zbog izrade novih stranica hztm.hr; WIP 08/2022)

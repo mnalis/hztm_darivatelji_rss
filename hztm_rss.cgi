@@ -18,7 +18,8 @@ use feature qw(say);
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use Encode qw(decode);
-use HTML::TreeBuilder::XPath;
+use LWP::UserAgent;
+use Text::CSV qw(csv);
 use XML::Feed;
 use IO::Handle;
 use Fcntl ':flock';
@@ -36,8 +37,9 @@ my $UPDATE_SECONDS = 60*60*24*1;	# force update if not changed for this many sec
 # no user serviceable parts below #
 ###################################
 my $q = new CGI;
-my $VERSION = '2015-06-20';	# change script version here.
-my $HZTM_URL = 'http://hztm.hr/hr/content/22/zalihe-krvi/831/zalihe-krvi';
+my $VERSION = '2022-06-14';	# change script version here.
+my $HZTM_URL = 'https://hztm.hr/zalihe_krvi/';
+my $HZTM_DATA_URL = 'https://hztm.hr/doze/blood_data.html';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
 my $force_update = 0;
 my @history = ();
@@ -191,6 +193,28 @@ sub read_datafile
         }
 }
 
+# fetches and returns data from specified URL, or dies with error
+sub fetch_url($)
+{
+        my ($url) = @_;
+        
+        my $ua = LWP::UserAgent->new;
+        $ua->agent("hztm_rss.cgi/$VERSION ");
+
+        # Create a request
+        my $req = HTTP::Request->new(GET => $url);
+
+        # Pass request to the user agent and get a response back
+        my $res = $ua->request($req);
+
+        # Check the outcome of the response
+        if ($res->is_success) {
+            return $res->content;
+        }
+        else {
+            die "failed fetching $url: " . $res->status_line;
+        }
+}
 
 ###########################################################
 # parse HTZM HTML and update history datafiles if changed #
@@ -200,9 +224,16 @@ sub parse_html_and_update_history
         ########################
         #### parse the HTML ####
         ########################
+        
+        
+        print fetch_url($HZTM_URL);
+        print fetch_url($HZTM_DATA_URL);
+        
+        die "fixme /mn/";
 
-        #my $HZTM_FILE = 'zalihe-krvi'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
-        my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_URL);
+
+        my $HZTM_FILE = 'blood_data.html'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
+        #my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_DATA_URL);
 
         my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
 
