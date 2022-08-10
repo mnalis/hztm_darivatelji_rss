@@ -270,45 +270,20 @@ sub parse_html_and_update_history
           chomp $b;
           #say "b=$b";
           my ($bd_grupa, $bd_broj, $bd_postotak) = split /\|/, $b;
-          say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak";
-          use Data::Dumper;
-          #say "pre $bd_grupa:" . Dumper($current{$bd_grupa});
-          $current{$bd_grupa}{bd_broj} = $bd_broj;
-          $current{$bd_grupa}{bd_postotak} = $bd_postotak;
-          #say "post $bd_grupa:" . Dumper($current{$bd_grupa});
+          #use Data::Dumper; say "pre $bd_grupa:" . Dumper($current{$bd_grupa});
+          $bd_postotak += 0;    # convert to number to get rid of vertical whitespace
+          #$current{$bd_grupa}{'bd_postotak'} = $bd_postotak;
+          #$current{$bd_grupa}{'bd_broj'} = $bd_broj;
+          
+          my $c_posto = int(($bd_broj - $current{$bd_grupa}{'empty'}) / $current{$bd_grupa}{'full'}*100);
+          $current{$bd_grupa}{'c_posto'} = $c_posto;
+          #use Data::Dumper; say "post $bd_grupa (c_posto=$c_posto):" . Dumper($current{$bd_grupa});
+          say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak, c_posto=$c_posto";
         }
-        
-# JS code:
-#        let newVal = empty;
-#        if (val > group.empty && val <= group.full) {
-#            newVal = ((val-group.empty)/group.full)*full;
-#              }
-#              else if (val > group.full) {
-#            newVal = full;
-#        } else {
-#            newVal = empty;
-#        }
-#        group.el.style.height = newVal + 'px';
 
+        use Data::Dumper; say Dumper(\%current);
         
         die "fixme /mn/";
-
-        my $HZTM_FILE = 'blood_data.html'; my $tree= HTML::TreeBuilder::XPath->new_from_file($HZTM_FILE);	# DEBUG ONLY
-        #my $tree= HTML::TreeBuilder::XPath->new_from_url($HZTM_DATA_URL);
-
-        my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
-
-
-        for my $jedna (@sve) {
-            my $c_posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
-            my $ime = $jedna->findnodes( 'div[contains(concat(" ", normalize-space(@class), " "),"name")]' )->[0];
-            my $c_grupa = $ime->content->[0];
-            my $attr = $ime->attr('class');
-            my $c_nedostaje = ($attr =~ /\bbig\b/) || 0;
-            #say "grupa=$grupa, attr=$attr, nedostaje=$nedostaje, posto=$posto";
-            #say '' . ($c_nedostaje?'Nedostaje':'Ima dovoljno') . " krvne grupe $c_grupa ($c_posto %)";
-            $current{$c_grupa} = { timestamp => $c_timestamp, grupa => $c_grupa, nedostaje => $c_nedostaje, posto => $c_posto };
-        }
 
         ##############################
         #### update history files ####
