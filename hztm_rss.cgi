@@ -3,11 +3,12 @@
 #
 # detektira zalihe krvi u HZTMu, kako bi RSSom mogao dojaviti korisnicima kada neke krvne grupe nedostaje.
 #
-# in Debian requisite modules are installed with: "apt-get install libhtml-treebuilder-xpath-perl libxml-feed-perl libcgi-pm-perl"
+# in Debian requisite modules are installed with: "apt-get install liblwp-protocol-https-perl libxml-feed-perl libcgi-pm-perl"
 #
 # FIXME - RSS/Atom - only display last 10 or changes
 # FIXME - na mnalis.com/hztm stavi html formu da biras RSS/Atom i koju krvnu grupu.
 # FIXME - also handle "too much blood for this group" condition later
+
 
 
 use strict;
