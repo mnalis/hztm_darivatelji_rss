@@ -276,14 +276,13 @@ sub parse_html_and_update_history
           #$current{$bd_grupa}{'bd_broj'} = $bd_broj;
           
           my $c_posto = int(($bd_broj - $current{$bd_grupa}{'empty'}) / $current{$bd_grupa}{'full'}*100);
-          $current{$bd_grupa}{'c_posto'} = $c_posto;
-          #use Data::Dumper; say "post $bd_grupa (c_posto=$c_posto):" . Dumper($current{$bd_grupa});
           say "BD: grupa=$bd_grupa, bd_broj=$bd_broj, bd_postotak=$bd_postotak, c_posto=$c_posto";
+          $current{$bd_grupa}{'posto'} = $c_posto;
+          $current{$bd_grupa}{'nedostaje'} = ($c_posto < 30)?1:0
+          #use Data::Dumper; say "post $bd_grupa (c_posto=$c_posto):" . Dumper($current{$bd_grupa});
         }
 
-        use Data::Dumper; say Dumper(\%current);
-        
-        die "fixme /mn/";
+        #use Data::Dumper; say Dumper(\%current);
 
         ##############################
         #### update history files ####
