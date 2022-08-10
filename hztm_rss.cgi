@@ -19,7 +19,6 @@ use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use Encode qw(decode);
 use LWP::UserAgent;
-use Text::CSV qw(csv);
 use XML::Feed;
 use IO::Handle;
 use Fcntl ':flock';
@@ -253,8 +252,32 @@ sub parse_html_and_update_history
         } else {
           die "FAILED: can't find/parse HTML JS consts"
         }
+
+
+        ##############################################
+        #### parse the current CSV XHR blood data ####
+        ##############################################
+
+        #my $blood_data = fetch_url($HZTM_DATA_URL); #FIXME
+        my $blood_data = fetch_url('file:./blood_data.html');
+
+        # NB. Text::CSV wants filehandles, and we have strings... oh well, parse manually
+        my @blood_data = split /^/, $blood_data;
+        die "unable to start parsing blood_data.html" if (shift @blood_data) !~ /^GRUPA|BROJ|POSTOTAK\s*$/;
+        die "unable to end parsing blood_data.html" if (pop @blood_data) !~/^UKUPNO|.*|100\s*$/;
+        foreach my $b (@blood_data) {
+          chomp $b;
+          #say "b=$b";
+          my ($bd_grupa, $bd_broj, $bd_postotak) = split /\|/, $b;
+          say "BD: grupa=$bd_grupa, broj=$bd_broj, postotak=$bd_postotak";
+          use Data::Dumper;
+          #say "pre $bd_grupa:" . Dumper($current{$bd_grupa});
+          $current{$bd_grupa}{bd_broj} = $bd_broj;
+          $current{$bd_grupa}{bd_postotak} = $bd_postotak;
+          #say "post $bd_grupa:" . Dumper($current{$bd_grupa});
+        }
         
-        #my $data = fetch_url($HZTM_DATA_URL); #FIXME
+        #say "$data";
         
         die "fixme /mn/";
 
