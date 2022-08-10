@@ -221,28 +221,18 @@ sub fetch_url($)
 ###########################################################
 sub parse_html_and_update_history
 {
-        ########################
-        #### parse the HTML ####
-        ########################
-        
+        #################################
+        #### parse the HTML JS const ####
+        #################################
  
-# example html:       
-#const groups = {
-#    'A+': {min: 0, max: 535, full: 510, empty: 0, el: document.getElementById('aplus')},
-#    'A-': {min: 0, max: 118, full: 110, empty: 0, el: document.getElementById('aminus')},
-#    'B+': {min: 0, max: 284, full: 255, empty: 0, el: document.getElementById('bplus')},
-#    'B-': {min: 0, max: 54, full: 65, empty: 0, el: document.getElementById('bminus')},
-#    'O+': {min: 0, max: 525, full: 510, empty: 0, el: document.getElementById('zeroplus')},
-#    'O-': {min: 0, max: 111, full: 110, empty: 0, el: document.getElementById('zerominus')},
-#    'AB+': {min: 0, max: 127, full: 125, empty: 0, el: document.getElementById('abplus')},
-#    'AB-': {min: 0, max: 25, full: 30, empty: 0, el: document.getElementById('abminus')}
-#}
+        my %current = ();
+        my $c_timestamp = time;
 
 
         #my $html = fetch_url($HZTM_URL); #FIXME
         my $html = fetch_url('file:./blood_data_index.html');
         #say $html;
-        # NB: unfortunately, JSON:PP even with all allow_* fails parsing at document.getElementById, so we have to this manually :(
+        # NB: unfortunately, JSON::PP even with all allow_* fails parsing at document.getElementById, so we have to this manually :(
         if ($html =~ /const\s+groups\s*=\s*\{\s*(.*?)^\s*\}\s*$/gms) {
           my @consts = split /^/, $1;
           foreach my $c (@consts) {
@@ -254,13 +244,14 @@ sub parse_html_and_update_history
                     full\s*:\s*(\d+)\s*,\s*
                     empty\s*:\s*(\d+)\s*,\s*
                 /x) {
-              say "g=$1, min=$2, max=$3, full=$4, empty=$5";
+              say "grupa=$1, min=$2, max=$3, full=$4, empty=$5";
+              $current{$1} = { timestamp => $c_timestamp, grupa=>$1, min=>$2, max=>$3, full=>$4, empty=>$5 };
             } else {
-              die "can't parse const: $c";
+              die "can't parse JS const: $c";
             }
           }
         } else {
-          die "FAILED: can't parse HTML JS"
+          die "FAILED: can't find/parse HTML JS consts"
         }
         
         #my $data = fetch_url($HZTM_DATA_URL); #FIXME
@@ -273,8 +264,6 @@ sub parse_html_and_update_history
 
         my @sve=$tree->findnodes( '/html/body//div[@id="supplies"]/div[contains(concat(" ", normalize-space(@class), " "),"measure")]' );
 
-        my %current = ();
-        my $c_timestamp = time;
 
         for my $jedna (@sve) {
             my $c_posto = int ($jedna->findnodes( 'div[@class="outer"]/div[@class="inner"]' )->[0]->attr('data-percent'));
