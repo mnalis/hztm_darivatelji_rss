@@ -36,7 +36,7 @@ my $UPDATE_SECONDS = 60*60*24*1;	# force update if not changed for this many sec
 # no user serviceable parts below #
 ###################################
 my $q = new CGI;
-my $VERSION = '2022-06-14';	# change script version here.
+my $VERSION = '2022-08-11';	# change script version here.
 my $HZTM_URL = 'https://hztm.hr/zalihe_krvi/';
 my $HZTM_DATA_URL = 'https://hztm.hr/doze/blood_data.html';
 my $HISTORY_TMP = $HISTORY_DATA . '.tmp';
@@ -45,6 +45,17 @@ my @history = ();
 my %zadnja = ();
 my $old_datafile = '';
 
+# map from currently used in HTML/CSV to original old (and history) data format
+my %KRV = ( 
+    'A+' => 'A+',
+    'A-' => 'A=',
+    'AB+' => 'AB+',
+    'AB-' => 'AB=',
+    'B+' => 'B+',
+    'B-' => 'B=',
+    'O+' => '0+',
+    'O-' => '0=',
+);
 #####################
 #### CGI helpers ####
 #####################
@@ -243,9 +254,9 @@ sub parse_html_and_update_history
                     full\s*:\s*(\d+)\s*,\s*
                     empty\s*:\s*(\d+)\s*,\s*
                 /x) {
-              say "grupa=$1, min=$2, max=$3, full=$4, empty=$5";
-              #$current{$1} = { timestamp => $c_timestamp, grupa=>$1, min=>$2, max=>$3, full=>$4, empty=>$5 };
-              $current{$1} = { timestamp => $c_timestamp, grupa=>$1, full=>$4, empty=>$5 };
+              say "grupa=$KRV{$1}, min=$2, max=$3, full=$4, empty=$5";
+              #$current{$KRV{$1}} = { timestamp => $c_timestamp, grupa=>$KRV{$1}, min=>$2, max=>$3, full=>$4, empty=>$5 };
+              $current{$KRV{$1}} = { timestamp => $c_timestamp, grupa=>$KRV{$1}, full=>$4, empty=>$5 };
             } else {
               die "can't parse JS const: $c";
             }
@@ -270,6 +281,7 @@ sub parse_html_and_update_history
           chomp $b;
           #say "b=$b";
           my ($bd_grupa, $bd_broj, $bd_postotak) = split /\|/, $b;
+          $bd_grupa=$KRV{$bd_grupa};
           #use Data::Dumper; say "pre $bd_grupa:" . Dumper($current{$bd_grupa});
           $bd_postotak += 0;    # convert to number to get rid of vertical whitespace
           #$current{$bd_grupa}{'bd_postotak'} = $bd_postotak;
